@@ -1,0 +1,13 @@
+[orchestrator]
+max_rounds = 3
+min_rounds = 1
+timeout_per_team_seconds = 1800
+submission_timeout_seconds = 1200
+judgment_timeout_seconds = 300
+
+evaluator_config = "configs/evaluators/evaluator_feasibility.toml"
+judgment_config = "configs/judgment/judgment_feasibility.toml"
+prompt_builder_config = "configs/prompt_builder_feasibility.toml"
+
+[[orchestrator.teams]]
+config = "configs/agents/team_feasibility_analyst.toml"

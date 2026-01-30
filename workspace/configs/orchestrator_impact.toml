@@ -1,0 +1,13 @@
+[orchestrator]
+max_rounds = 3
+min_rounds = 1
+timeout_per_team_seconds = 900
+submission_timeout_seconds = 600
+judgment_timeout_seconds = 120
+
+evaluator_config = "configs/evaluators/evaluator_impact.toml"
+judgment_config = "configs/judgment/judgment_impact.toml"
+prompt_builder_config = "configs/prompt_builder_impact.toml"
+
+[[orchestrator.teams]]
+config = "configs/agents/team_impact_analyst.toml"

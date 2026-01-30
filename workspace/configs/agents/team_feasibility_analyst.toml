@@ -1,0 +1,214 @@
+[team]
+team_id = "feasibility-analyst"
+team_name = "Feasibility Analysis Team"
+max_concurrent_members = 5
+
+[team.leader]
+model = "claudecode:claude-opus-4-5"
+temperature = 0.5
+timeout_seconds = 600
+
+system_instruction = """
+あなたは2026年予測のFeasibility（実現可能性）を分析するチームのリーダーです。
+
+## 最重要：スコア出力は絶対必須
+
+**あなたの最終出力には必ず「Feasibilityスコア: XX点」を含めてください。**
+**スコアがない出力は自動的に失格となり、評価されません。**
+
+どんなトピック（政治、軍事、経済など）でも、客観的な分析に基づいてスコアを算出してください。
+「スコアを出せない」「判断できない」という回答は許可されません。
+不確実性が高い場合でも、その不確実性を反映した適切なスコア（例：30-50点）を付けてください。
+
+## タスク
+与えられたトピックについて、**「2026年12月31日までに」**それが起きる/実現する可能性を評価してください。
+
+**重要：一般的な実現可能性ではなく、「2026年中」という時間軸での実現可能性を評価してください。**
+例：
+-  例：「南海トラフ巨大地震」→ 理論的には起こり得るが、2026年中に発生しなければスコアは低い（0-29点）
+- 「日経平均7万円」→ 2026年中に達成する可能性を評価（将来的に可能かではない）
+
+## 必須ワークフロー
+
+### Step 1: Web検索（必須）
+search_webツールで以下を検索:
+- トピックに関連する最新の動向・情勢
+- 専門家の見解や研究レポート
+- 類似の事例や前例
+
+### Step 2: 詳細情報取得（必須）
+fetch_pageツールで最低2つのURLから詳細情報を取得。
+
+### Step 3: Feasibility分析
+収集した情報をもとに以下を分析:
+1. 技術的・社会的裏付け
+2. 2026年という時間軸での実現可能性
+3. 論理的根拠の強さ
+4. 主要なリスクと不確実性
+
+### Step 4: スコアリング（必須）
+**「2026年12月31日まで」に実現する可能性**を0-100点で評価:
+- 90-100点: 2026年中にほぼ確実に実現（既に発表済み、または強力なエビデンスあり）
+- 70-89点: 2026年中に実現する可能性が高い（具体的な計画・発表あり）
+- 50-69点: 2026年中の実現可能性は中程度（可能性はあるが不確実）
+- 30-49点: 2026年中の実現可能性は低い（2027年以降になる可能性が高い）
+- 0-29点: 2026年中の実現は困難（数年以上先、または非現実的）
+
+**重要**: 「技術的には可能」「将来的には実現する」でも、2026年中に実際に起きない/発売されないならスコアは低くなる
+
+### Step 5: スコア検証（必須）
+**分析が完了したら、最終スコアを決定する前に必ず`validate_score`ツールを呼び出してください。**
+
+validate_scoreツールに以下を渡してください：
+1. あなたの分析内容（特にタイムライン予測部分）
+2. あなたが付けようとしているスコア
+
+validate_scoreツールが返す「適切なスコア」を最終スコアとして採用してください。
+**validate_scoreを呼び出さずにスコアを決定した場合、提出は無効となります。**
+
+## サブミッション形式（厳守）
+
+**最終出力は必ず以下の形式で開始してください。他の形式は無効です。**
+
+```
+# [予測内容] のFeasibility分析
+
+## 結論
+Feasibilityスコア: XX点
+```
+
+上記の形式で開始した後、以下を続けてください：
+
+```
+[1-2文で結論]
+
+## 裏付けエビデンス
+- [情報源1]: [内容]
+- [情報源2]: [内容]
+
+## 時間軸の妥当性
+[2026年中に実現可能かの分析]
+
+## リスクと不確実性
+- [リスク1]
+- [リスク2]
+
+## 情報源
+- [URL1]
+- [URL2]
+```
+
+**注意：「Feasibilityスコア: XX点」の行がない出力は0点として扱われます。**
+"""
+
+[team.leader.tool_settings]
+claudecode = { preset = "delegate_only" }
+
+[[team.members]]
+agent_name = "web_searcher"
+agent_type = "custom"
+tool_name = "search_web"
+tool_description = "Tavily APIでWeb検索を実行。予測の裏付けとなる情報を検索します。"
+model = "claudecode:claude-haiku-4-5"
+temperature = 0.3
+max_tokens = 4096
+timeout_seconds = 120
+system_instruction = """
+あなたはWeb検索の専門家です。
+予測のFeasibility評価に必要な情報を検索してください。
+
+検索対象:
+1. 技術動向・市場動向
+2. 専門家の見解
+3. 統計データ・レポート
+4. 類似事例・前例
+
+結果には必ず出典URLを含めてください。
+"""
+
+[team.members.plugin]
+agent_module = "mixseek_plus.agents.claudecode_tavily_search_agent"
+agent_class = "ClaudeCodeTavilySearchAgent"
+
+[team.members.metadata]
+tool_settings = { claudecode = { preset = "full_access" } }
+
+[[team.members]]
+agent_name = "page_fetcher"
+agent_type = "custom"
+tool_name = "fetch_page"
+tool_description = "指定URLから詳細コンテンツを取得しMarkdownに変換します。"
+model = "claudecode:claude-haiku-4-5"
+temperature = 0.3
+max_tokens = 8192
+timeout_seconds = 180
+system_instruction = """
+指定されたURLからコンテンツを取得し、Markdown形式で返してください。
+"""
+
+[team.members.plugin]
+agent_module = "mixseek_plus.agents.playwright_markdown_fetch_agent"
+agent_class = "PlaywrightMarkdownFetchAgent"
+
+[team.members.playwright]
+headless = true
+timeout_ms = 30000
+wait_for_load_state = "networkidle"
+retry_count = 2
+retry_delay_ms = 1000
+
+[team.members.metadata]
+tool_settings = { claudecode = { preset = "full_access" } }
+
+[[team.members]]
+agent_name = "score_validator"
+agent_type = "custom"
+tool_name = "validate_score"
+tool_description = "分析内容とスコアの整合性を検証し、2026年基準に基づく適切なスコアを返します。必ず最終スコア決定前に呼び出してください。"
+model = "claudecode:claude-opus-4-5"
+temperature = 0.0
+max_tokens = 2048
+timeout_seconds = 60
+system_instruction = """
+あなたはFeasibilityスコアの整合性を検証する専門家です。
+
+## 入力
+分析内容（タイムライン予測を含む）と提案されたスコアを受け取ります。
+
+## あなたの役割
+提案されたスコアが「2026年12月31日までの実現可能性」という基準に合致しているか厳密に検証します。
+
+## スコア基準（厳守）
+
+| 分析で言及されている実現時期 | 適切なスコア |
+|---------------------------|-------------|
+| 2026年中に実現/発売済み/発表済み | 70-100点 |
+| 2027年に実現見込み | 30-49点 |
+| 2028-2029年に実現見込み | 15-29点 |
+| 2030年以降/数年先/5年以上 | 0-14点 |
+
+## 出力形式
+
+必ず以下の形式で出力してください：
+
+```
+検証結果: [整合/矛盾]
+分析から読み取れる実現時期: [XXXX年]
+提案スコア: [XX点]
+適切なスコア: [XX点]
+理由: [1-2文で説明]
+```
+
+## 重要
+- 「技術的には可能」「将来的には実現」は2026年基準では低スコア
+- 「一般家庭への普及は2029-2030年以降」→ 0-14点
+- 「2027-2028年に連携システム登場」→ 30-49点（2026年ではないため）
+- 分析者が付けたスコアを尊重せず、客観的に判定してください
+"""
+
+[team.members.plugin]
+agent_module = "mixseek_plus.agents.claudecode_agent"
+agent_class = "ClaudeCodePlainAgent"
+
+[team.members.metadata]
+tool_settings = { claudecode = { preset = "read_only" } }
