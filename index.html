@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>2026年超予測スコア</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@stlite/mountable@0.73.0/build/stlite.css">
+</head>
+<body>
+    <div id="root"></div>
+    <script src="https://cdn.jsdelivr.net/npm/@stlite/mountable@0.73.0/build/stlite.js"></script>
+    <script>
+        stlite.mount({
+            requirements: ["plotly", "pandas", "statsmodels"],
+            entrypoint: "app.py",
+            files: {
+                "app.py": `
+import streamlit as st
+import pandas as pd
+import plotly.express as px
+import io
+
+st.set_page_config(page_title="2026年超予測スコア分析", layout="wide")
+
+st.title("2026年超予測スコア分析")
+st.markdown("17件の予測データの実現可能性・影響度・独自性を可視化")
+
+# データ埋め込み（横持ち形式）
+DATA = """prediction_id,prediction_text,feasibility,impact,uniqueness
+1,全自動洗濯機 登場、洗濯ものを入れれば洗って乾かしてたたんでくれる,38,81,25
+2,地震抑止技術の開発完了,8,94,98
+3,がんの早期発見が可能に、これにより平均寿命が１００歳になる見込み,30,92,35
+4,４次元ポケットの研究開発に目途,2,97,95
+5,台湾侵攻,40,93,5
+6,トランプ政権終了,20,82,78
+7,AGI登場,55,95,5
+8,従業員1名のビッグテック企業が誕生,15,82,5
+9,大手SaaSサービス(Salesforceなど)が終了する,18,92,92
+10,貴金属価格が2倍になる,65,78,15
+11,不老不死ビジネスが開始する,72,91,15
+12,ランサムウェアによる大手企業(プライム市場クラス)が倒産する,38,78,72
+13,NATOが分裂・変質する,78,84,15
+14,アメリカ合衆国の中間選挙で第三の党が発足,28,79,85
+15,核融合発電の実現の目処がつく,68,89,25
+16,OpenAIが破綻する,12,79,5
+17,大手人材派遣企業が倒産する,25,79,68
+"""
+
+df = pd.read_csv(io.StringIO(DATA))
+
+# total_score を計算
+df["total_score"] = df["feasibility"] + df["impact"] + df["uniqueness"]
+
+# 縦持ち変換（ストリッププロット・箱ひげ図用）
+df_tidy = df.melt(
+    id_vars=["prediction_id", "prediction_text", "total_score"],
+    value_vars=["feasibility", "impact", "uniqueness"],
+    var_name="category",
+    value_name="score"
+)
+
+# カテゴリ名を日本語化
+category_map = {
+    "feasibility": "実現可能性",
+    "impact": "影響度",
+    "uniqueness": "独自性"
+}
+df_tidy["category"] = df_tidy["category"].map(category_map)
+
+# 1. 積み上げ棒グラフ（合計スコア順）- 先頭に移動
+st.subheader("1. 予測別スコア内訳（積み上げ棒グラフ）")
+st.markdown("合計スコア降順で各予測の内訳を表示")
+
+df_sorted = df.sort_values("total_score", ascending=False).copy()
+df_sorted["label"] = df_sorted["prediction_text"].str[:20] + "..."
+
+fig_bar = px.bar(
+    df_sorted,
+    x="label",
+    y=["feasibility", "impact", "uniqueness"],
+    labels={"value": "スコア", "label": "予測", "variable": "カテゴリ"},
+    hover_data=["prediction_text", "total_score"],
+)
+fig_bar.update_layout(
+    xaxis_tickangle=-45,
+    legend_title_text="カテゴリ",
+    barmode="stack"
+)
+newnames = {"feasibility": "実現可能性", "impact": "影響度", "uniqueness": "独自性"}
+fig_bar.for_each_trace(lambda t: t.update(name=newnames.get(t.name, t.name)))
+st.plotly_chart(fig_bar, use_container_width=True)
+
+# 2. ストリッププロット
+st.subheader("2. スコア分布（全データ点）")
+st.markdown("各カテゴリにおける17件のスコア分布を点で表示")
+fig1 = px.strip(
+    df_tidy,
+    x="category",
+    y="score",
+    color="category",
+    hover_data=["prediction_text", "total_score"],
+    labels={"score": "スコア", "category": "カテゴリ"},
+)
+fig1.update_layout(showlegend=False)
+fig1.update_traces(marker=dict(size=12))
+st.plotly_chart(fig1, use_container_width=True)
+
+# 3. 箱ひげ図 + 全データ点
+st.subheader("3. 箱ひげ図（統計量と全データ点）")
+st.markdown("中央値・四分位範囲と外れ値を把握")
+fig2 = px.box(
+    df_tidy,
+    x="category",
+    y="score",
+    color="category",
+    points="all",
+    hover_data=["prediction_text"],
+    labels={"score": "スコア", "category": "カテゴリ"},
+)
+fig2.update_layout(showlegend=False)
+st.plotly_chart(fig2, use_container_width=True)
+
+# === 実現可能性 vs 独自性の相反関係 ===
+st.markdown("---")
+st.header("実現可能性 vs 独自性：トレードオフ分析")
+st.markdown("**実現しやすい予測は独自性が低く、独自性の高い予測は実現が困難**という傾向を可視化")
+
+# 4. 散布図 + 回帰線
+st.subheader("4. 散布図（負の相関）")
+
+# 相関係数を計算
+corr = df["feasibility"].corr(df["uniqueness"])
+st.markdown(f"相関係数: **{corr:.3f}**（強い負の相関）")
+
+fig_scatter = px.scatter(
+    df,
+    x="feasibility",
+    y="uniqueness",
+    text="prediction_id",
+    hover_data=["prediction_text"],
+    labels={"feasibility": "実現可能性", "uniqueness": "独自性"},
+    trendline="ols",
+)
+fig_scatter.update_traces(textposition="top center", marker=dict(size=12))
+fig_scatter.update_layout(
+    xaxis=dict(range=[0, 100]),
+    yaxis=dict(range=[0, 100]),
+)
+st.plotly_chart(fig_scatter, use_container_width=True)
+
+# 5. ダンベルチャート
+st.subheader("5. ダンベルチャート（ギャップ可視化）")
+st.markdown("各予測の実現可能性と独自性を点で表示し、線で接続。ギャップが大きいほどトレードオフが顕著")
+
+import plotly.graph_objects as go
+
+df_dumbbell = df.sort_values("feasibility", ascending=True).copy()
+df_dumbbell["label"] = df_dumbbell["prediction_text"].str[:25] + "..."
+
+fig_dumbbell = go.Figure()
+
+# 接続線
+for i, row in df_dumbbell.iterrows():
+    fig_dumbbell.add_trace(go.Scatter(
+        x=[row["feasibility"], row["uniqueness"]],
+        y=[row["label"], row["label"]],
+        mode="lines",
+        line=dict(color="gray", width=2),
+        showlegend=False,
+        hoverinfo="skip"
+    ))
+
+# 実現可能性の点
+fig_dumbbell.add_trace(go.Scatter(
+    x=df_dumbbell["feasibility"],
+    y=df_dumbbell["label"],
+    mode="markers",
+    marker=dict(color="#636EFA", size=12),
+    name="実現可能性",
+    hovertemplate="%{y}<br>実現可能性: %{x}<extra></extra>"
+))
+
+# 独自性の点
+fig_dumbbell.add_trace(go.Scatter(
+    x=df_dumbbell["uniqueness"],
+    y=df_dumbbell["label"],
+    mode="markers",
+    marker=dict(color="#EF553B", size=12),
+    name="独自性",
+    hovertemplate="%{y}<br>独自性: %{x}<extra></extra>"
+))
+
+fig_dumbbell.update_layout(
+    xaxis_title="スコア",
+    yaxis_title="",
+    height=600,
+    legend=dict(orientation="h", yanchor="bottom", y=1.02),
+)
+st.plotly_chart(fig_dumbbell, use_container_width=True)
+
+# 6. 四象限チャート
+st.subheader("6. 四象限チャート（予測の分類）")
+st.markdown("中央値を基準に4つのカテゴリに分類")
+
+median_f = df["feasibility"].median()
+median_u = df["uniqueness"].median()
+
+# 象限ラベルを追加
+def get_quadrant(row):
+    if row["feasibility"] >= median_f and row["uniqueness"] >= median_u:
+        return "高実現性・高独自性（理想）"
+    elif row["feasibility"] >= median_f and row["uniqueness"] < median_u:
+        return "高実現性・低独自性（平凡）"
+    elif row["feasibility"] < median_f and row["uniqueness"] >= median_u:
+        return "低実現性・高独自性（挑戦的）"
+    else:
+        return "低実現性・低独自性（要検討）"
+
+df["quadrant"] = df.apply(get_quadrant, axis=1)
+
+fig_quad = px.scatter(
+    df,
+    x="feasibility",
+    y="uniqueness",
+    color="quadrant",
+    text="prediction_id",
+    hover_data=["prediction_text"],
+    labels={"feasibility": "実現可能性", "uniqueness": "独自性", "quadrant": "分類"},
+    color_discrete_map={
+        "高実現性・高独自性（理想）": "#00CC96",
+        "高実現性・低独自性（平凡）": "#636EFA",
+        "低実現性・高独自性（挑戦的）": "#EF553B",
+        "低実現性・低独自性（要検討）": "#AB63FA",
+    }
+)
+fig_quad.update_traces(textposition="top center", marker=dict(size=14))
+
+# 中央線を追加
+fig_quad.add_hline(y=median_u, line_dash="dash", line_color="gray", annotation_text=f"独自性中央値: {median_u}")
+fig_quad.add_vline(x=median_f, line_dash="dash", line_color="gray", annotation_text=f"実現可能性中央値: {median_f}")
+
+fig_quad.update_layout(
+    xaxis=dict(range=[0, 100]),
+    yaxis=dict(range=[0, 100]),
+    legend=dict(orientation="h", yanchor="bottom", y=-0.3),
+    height=600,
+)
+st.plotly_chart(fig_quad, use_container_width=True)
+
+# 象限別の予測一覧
+st.markdown("**象限別の予測一覧:**")
+for quad in ["高実現性・高独自性（理想）", "低実現性・高独自性（挑戦的）", "高実現性・低独自性（平凡）", "低実現性・低独自性（要検討）"]:
+    subset = df[df["quadrant"] == quad]
+    if len(subset) > 0:
+        st.markdown(f"- **{quad}**: {', '.join(subset['prediction_text'].str[:15].tolist())}")
+
+st.markdown("---")
+
+# データテーブル表示
+st.subheader("7. データ一覧")
+st.markdown("全17件の予測データ（合計スコア降順）")
+display_df = df_sorted[["prediction_id", "prediction_text", "feasibility", "impact", "uniqueness", "total_score"]].copy()
+display_df.columns = ["ID", "予測内容", "実現可能性", "影響度", "独自性", "合計スコア"]
+st.dataframe(display_df, use_container_width=True, hide_index=True)
+
+st.markdown("---")
+st.markdown("*Built with [Stlite](https://github.com/whitphx/stlite) + [Plotly](https://plotly.com/python/)*")
+`
+            }
+        }, document.getElementById("root"));
+    </script>
+</body>
+</html>
