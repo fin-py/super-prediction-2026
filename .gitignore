@@ -228,3 +228,6 @@ CLAUDE.md
 
 # logs
 logs/
+
+# large database files
+workspace/mixseek.db

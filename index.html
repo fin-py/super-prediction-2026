@@ -23,7 +23,7 @@ import io
 st.set_page_config(page_title="2026年超予測スコア分析", layout="wide")
 
 st.title("2026年超予測スコア分析")
-st.markdown("17件の予測データの実現可能性・影響度・独自性を可視化")
+st.markdown("21件の予測データの実現可能性・影響度・独自性を可視化")
 
 # データ埋め込み（横持ち形式）
 DATA = """prediction_id,prediction_text,feasibility,impact,uniqueness
@@ -44,6 +44,10 @@ DATA = """prediction_id,prediction_text,feasibility,impact,uniqueness
 15,核融合発電の実現の目処がつく,68,89,25
 16,OpenAIが破綻する,12,79,5
 17,大手人材派遣企業が倒産する,25,79,68
+18,ドル円200円以上への円安進行,12,88,92
+19,衆議院選挙での与党大敗,25,83,15
+20,サッカーワールドカップで日本が初優勝,8,82,92
+21,中国がレアアース輸出規制を実施,95,85,5
 """
 
 df = pd.read_csv(io.StringIO(DATA))
@@ -92,7 +96,7 @@ st.plotly_chart(fig_bar, use_container_width=True)
 
 # 2. ストリッププロット
 st.subheader("2. スコア分布（全データ点）")
-st.markdown("各カテゴリにおける17件のスコア分布を点で表示")
+st.markdown("各カテゴリにおける21件のスコア分布を点で表示")
 fig1 = px.strip(
     df_tidy,
     x="category",
@@ -258,7 +262,7 @@ st.markdown("---")
 
 # データテーブル表示
 st.subheader("7. データ一覧")
-st.markdown("全17件の予測データ（合計スコア降順）")
+st.markdown("全21件の予測データ（合計スコア降順）")
 display_df = df_sorted[["prediction_id", "prediction_text", "feasibility", "impact", "uniqueness", "total_score"]].copy()
 display_df.columns = ["ID", "予測内容", "実現可能性", "影響度", "独自性", "合計スコア"]
 st.dataframe(display_df, use_container_width=True, hide_index=True)
